@@ -28,9 +28,38 @@ class Song {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final List<int>? chordIds;
+  final List<String>? chordNames;
   final List<SongSequenceItem>? sequence;
   final int? chordCount;
+  final int? capo;
+  final String? strummingPattern;
   final List<Chord>? chordDetails;
+
+  int get chordCountValue {
+    final sequenceChordCount = sequence == null
+        ? 0
+        : sequence!
+            .map((item) => item.name.trim())
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .length;
+
+    final explicitChordDetails = chordDetails != null && chordDetails!.isNotEmpty
+        ? chordDetails!.length
+        : null;
+    final explicitChordIds = chordIds != null && chordIds!.isNotEmpty
+        ? chordIds!.length
+        : null;
+    final explicitChordNames = chordNames != null && chordNames!.isNotEmpty
+        ? chordNames!.length
+        : null;
+
+    return explicitChordDetails ??
+        explicitChordIds ??
+        explicitChordNames ??
+        (sequenceChordCount > 0 ? sequenceChordCount : null) ??
+        (chordCount ?? 0);
+  }
 
   const Song({
     this.id,
@@ -42,8 +71,11 @@ class Song {
     this.createdAt,
     this.updatedAt,
     this.chordIds,
+    this.chordNames,
     this.sequence,
     this.chordCount,
+    this.capo,
+    this.strummingPattern,
     this.chordDetails,
   });
 
@@ -66,6 +98,19 @@ class Song {
       }
     }
 
+    final rawChords = json['chords'];
+    final rawChordDefinitions = json['chord_definitions'];
+
+    List<Chord>? parseChordDefinitionList(dynamic value) {
+      if (value is List) {
+        return value
+            .where((e) => e is Map)
+            .map((e) => Chord.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      return null;
+    }
+
     return Song(
       id: id,
       title: json['title'] as String,
@@ -79,14 +124,26 @@ class Song {
       updatedAt: json['updated_at'] != null
           ? DateTime.tryParse(json['updated_at'] as String)
           : null,
-      chordIds: parseIntList(json['chord_ids'] ?? json['chords']),
-      sequence: _parseSongSequence(json['sequence'] ?? json['sequence_items'] ?? json['sequence_text']),
+      chordIds: parseIntList(json['chord_ids'] ?? rawChords),
+      chordNames: rawChords is List
+          ? rawChords.whereType<String>().toList().isNotEmpty
+              ? rawChords.whereType<String>().toList()
+              : null
+          : parseStringList(rawChords),
+      sequence: _parseSongSequence(json['sequence'] ?? json['sequence_items'] ?? json['sequence_text'] ?? json['chord_sequence']),
       chordCount: parseInt(json['chord_count']),
-      chordDetails: json['chord_details'] is List
-          ? (json['chord_details'] as List)
-              .map((e) => Chord.fromJson(Map<String, dynamic>.from(e as Map)))
-              .toList()
-          : null,
+      capo: parseInt(json['capo']),
+      strummingPattern: (json['strumming_pattern'] as String?) ?? (json['strummingPattern'] as String?),
+      chordDetails: parseChordDefinitionList(rawChordDefinitions) ??
+          (json['chord_details'] is List
+              ? (json['chord_details'] as List)
+                  .map((e) => Chord.fromJson(Map<String, dynamic>.from(e as Map)))
+                  .toList()
+              : rawChords is List && rawChords.isNotEmpty && rawChords.first is Map
+                  ? (rawChords)
+                      .map((e) => Chord.fromJson(Map<String, dynamic>.from(e as Map)))
+                      .toList()
+                  : null),
     );
   }
 
@@ -101,7 +158,10 @@ class Song {
       if (sequence != null)
         'sequence': sequence!.map((item) => item.toJson()).toList(),
       if (chordIds != null) 'chord_ids': chordIds,
+      if (chordNames != null) 'chords': chordNames,
       if (chordCount != null) 'chord_count': chordCount,
+      if (capo != null) 'capo': capo,
+      if (strummingPattern != null) 'strumming_pattern': strummingPattern,
       if (chordDetails != null)
         'chord_details': chordDetails!.map((c) => c.toJson()).toList(),
     };
@@ -117,8 +177,11 @@ class Song {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<int>? chordIds,
+    List<String>? chordNames,
     List<SongSequenceItem>? sequence,
     int? chordCount,
+    int? capo,
+    String? strummingPattern,
     List<Chord>? chordDetails,
   }) {
     return Song(
@@ -131,8 +194,11 @@ class Song {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       chordIds: chordIds ?? this.chordIds,
+      chordNames: chordNames ?? this.chordNames,
       sequence: sequence ?? this.sequence,
       chordCount: chordCount ?? this.chordCount,
+      capo: capo ?? this.capo,
+      strummingPattern: strummingPattern ?? this.strummingPattern,
       chordDetails: chordDetails ?? this.chordDetails,
     );
   }

@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/song.dart';
 import '../models/chord.dart';
-import '../models/practice_session.dart';
 import '../models/fingerstyle_song.dart';
 
 class ApiException implements Exception {
@@ -75,38 +74,6 @@ class ApiService {
 
   Future<void> deleteSong(String id) async {
     await _dio.delete(ApiConfig.songById(id));
-  }
-
-  // ─── Practice Sessions ────────────────────────────────────────────────────
-
-  Future<List<PracticeSession>> getSongPractice(String songId) async {
-    final response = await _dio.get(ApiConfig.songPractice(songId));
-    return compute(_parsePracticeSessions, response.data as List<dynamic>);
-  }
-
-  Future<PracticeSession> createSongPractice(
-      String songId, PracticeSession session) async {
-    final response = await _dio.post(
-      ApiConfig.songPractice(songId),
-      data: session.toJson(),
-    );
-    return compute(_parsePracticeSession, response.data as Map<String, dynamic>);
-  }
-
-  Future<List<PracticeSession>> getFingerstylePractice(
-      String fingerstyleId) async {
-    final response =
-        await _dio.get(ApiConfig.fingerstylePractice(fingerstyleId));
-    return compute(_parsePracticeSessions, response.data as List<dynamic>);
-  }
-
-  Future<PracticeSession> createFingerstylePractice(
-      String fingerstyleId, PracticeSession session) async {
-    final response = await _dio.post(
-      ApiConfig.fingerstylePractice(fingerstyleId),
-      data: session.toJson(),
-    );
-    return compute(_parsePracticeSession, response.data as Map<String, dynamic>);
   }
 
   // ─── Chords ───────────────────────────────────────────────────────────────
@@ -282,15 +249,6 @@ Song _parseSong(Map<String, dynamic> json) {
   return Song.fromJson(json);
 }
 
-List<PracticeSession> _parsePracticeSessions(List<dynamic> json) {
-  return json
-      .map((e) => PracticeSession.fromJson(Map<String, dynamic>.from(e as Map)))
-      .toList();
-}
-
-PracticeSession _parsePracticeSession(Map<String, dynamic> json) {
-  return PracticeSession.fromJson(json);
-}
 
 List<Chord> _parseChords(List<dynamic> json) {
   return json

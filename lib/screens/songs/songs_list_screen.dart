@@ -158,7 +158,7 @@ class SongsListScreen extends ConsumerWidget {
                             ? () {
                                 // ignore: avoid_print
                                 print('[SongsListScreen] navigating to /songs/${song.id}');
-                                context.go('/songs/${song.id}');
+                                context.push('/songs/${song.id}');
                               }
                             : null,
                         onDelete: () => _showOptions(context, ref, song),

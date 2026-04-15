@@ -21,6 +21,8 @@ class SongCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final chordCount = song.chordCountValue;
+
     if (song.id == null) {
       // ignore: avoid_print
       print('[SongCard] song has no id: title="${song.title}" artist="${song.artist}"');
@@ -40,8 +42,9 @@ class SongCard extends StatelessWidget {
               },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -98,7 +101,7 @@ class SongCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -117,10 +120,11 @@ class SongCard extends StatelessWidget {
                     StarRatingDisplay(rating: song.rating!, size: 13),
                 ],
               ),
-              if (song.chordIds != null && song.chordIds!.isNotEmpty) ...[
-                const SizedBox(height: 8),
+
+              if (chordCount > 0) ...[
+                const SizedBox(height: 6),
                 const Divider(height: 1),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     const Icon(
@@ -130,7 +134,7 @@ class SongCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${song.chordIds!.length} chord${song.chordIds!.length == 1 ? '' : 's'}',
+                      '$chordCount chord${chordCount == 1 ? '' : 's'}',
                       style: theme.textTheme.labelSmall,
                     ),
                   ],

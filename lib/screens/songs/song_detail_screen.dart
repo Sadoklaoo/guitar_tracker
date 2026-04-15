@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
+import '../../models/chord.dart';
 import '../../providers/songs_provider.dart';
 import '../../providers/chords_provider.dart';
 import '../../widgets/app_states.dart';
@@ -28,9 +29,6 @@ class SongDetailScreen extends ConsumerWidget {
         body: ErrorView(message: e.toString()),
       ),
       data: (song) {
-        final chordCount = song.chordCount ??
-            song.chordDetails?.length ??
-            song.chordIds?.length;
         final sequenceItems = song.sequence ?? [];
         final sequenceChordNames = sequenceItems
             .map((item) => item.name)
@@ -44,12 +42,100 @@ class SongDetailScreen extends ConsumerWidget {
                 song.chordIds!.isNotEmpty
             ? ref.watch(songChordsProvider(songId))
             : null;
+        final capo = song.capo;
+        final strummingPattern = song.strummingPattern?.trim();
+        final chordCount = song.chordDetails?.length ??
+            song.chordIds?.length ??
+            song.chordNames?.length ??
+            song.chordCount ??
+            sequenceChordNames.length;
+
+        List<Chord> _matchSequenceChords(List<String> names, List<Chord> chords) {
+          final seen = <String>{};
+          final result = <Chord>[];
+
+          for (final rawName in names) {
+            final normalized = rawName.trim().toLowerCase();
+            if (normalized.isEmpty || seen.contains(normalized)) continue;
+
+            Chord? match;
+            for (final chord in chords) {
+              if (chord.name.trim().toLowerCase() == normalized) {
+                match = chord;
+                break;
+              }
+            }
+
+            if (match != null) {
+              result.add(match);
+              seen.add(normalized);
+            }
+          }
+
+          return result;
+        }
+
+        Widget _buildSequenceChordList(List<Chord> chords) {
+          if (chords.isEmpty) {
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: sequenceChordNames.map((name) => Chip(label: Text(name))).toList(),
+            );
+          }
+
+          return SizedBox(
+            height: 140,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: chords.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (ctx, i) => ChordDiagramCard(
+                chord: chords[i],
+                onTap: () => ChordDetailSheet.show(ctx, chords[i]),
+              ),
+            ),
+          );
+        }
+
+        Widget _buildChordGrid(List<Chord> chords) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = (constraints.maxWidth - 12) / 2;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: chords
+                    .map(
+                      (chord) => SizedBox(
+                        width: itemWidth.clamp(140.0, constraints.maxWidth),
+                        child: ChordDiagramCard(
+                          chord: chord,
+                          onTap: () => ChordDetailSheet.show(context, chord),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          );
+        }
 
         return Scaffold(
           body: CustomScrollView(
             slivers: [
               // ── Hero Header ────────────────────────────────────────
               SliverAppBar(
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    if (Navigator.of(context).canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/songs');
+                    }
+                  },
+                ),
                 expandedHeight: 200,
                 pinned: true,
                 actions: [
@@ -60,14 +146,15 @@ class SongDetailScreen extends ConsumerWidget {
                 ],
                 flexibleSpace: FlexibleSpaceBar(
                   titlePadding:
-                      const EdgeInsets.fromLTRB(16, 0, 60, 16),
+                      const EdgeInsets.fromLTRB(16, 0, 60, 12),
                   title: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         song.title,
-                        style: theme.textTheme.titleLarge,
+                        style: theme.textTheme.titleLarge?.copyWith(height: 1),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -75,7 +162,10 @@ class SongDetailScreen extends ConsumerWidget {
                         song.artist,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppTheme.onSurfaceMuted,
+                          height: 1,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -111,6 +201,7 @@ class SongDetailScreen extends ConsumerWidget {
                   delegate: SliverChildListDelegate([
                     // ── Info Row ───────────────────────────────────
                     Wrap(
+                      alignment: WrapAlignment.start,
                       spacing: 8,
                       runSpacing: 8,
                       children: [
@@ -120,15 +211,34 @@ class SongDetailScreen extends ConsumerWidget {
                             label: song.genre!,
                             icon: Icons.category_outlined,
                           ),
-                        if (chordCount != null)
+                        if (sequenceChordNames.isNotEmpty)
                           _InfoChip(
-                            label: '$chordCount chord${chordCount == 1 ? '' : 's'}',
+                            label: '${sequenceChordNames.length} chord${sequenceChordNames.length == 1 ? '' : 's'}',
                             icon: Icons.piano_rounded,
                           ),
                         if (song.rating != null)
                           StarRatingDisplay(rating: song.rating!),
                       ],
                     ),
+
+                    if (song.capo != null ||
+                        (song.strummingPattern?.trim().isNotEmpty ?? false)) ...[
+                      const SizedBox(height: 28),
+                      if (song.capo != null)
+                        _SectionHeader(
+                          title: 'Capo',
+                          icon: Icons.filter_tilt_shift,
+                          badgeText: '${song.capo}',
+                        ),
+                      if (song.strummingPattern?.trim().isNotEmpty ?? false) ...[
+                        if (song.capo != null) const SizedBox(height: 12),
+                        _SectionHeader(
+                          title: 'Strumming',
+                          icon: Icons.music_note_rounded,
+                          badgeText: song.strummingPattern!.trim().replaceAll(RegExp(r"\s+"), ' '),
+                        ),
+                      ],
+                    ],
 
                     if (sequenceItems.isNotEmpty) ...[
                       const SizedBox(height: 28),
@@ -146,72 +256,43 @@ class SongDetailScreen extends ConsumerWidget {
                                 ? Text('x${item.repeats}')
                                 : null,
                           )),
-                      if (sequenceChordNames.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _SectionHeader(
-                          title: 'Chord list',
-                          icon: Icons.music_note,
-                          count: sequenceChordNames.length,
+                    ],
+
+                    if (sequenceChordNames.isNotEmpty ||
+                        (song.chordDetails != null && song.chordDetails!.isNotEmpty) ||
+                        (song.chordNames != null && song.chordNames!.isNotEmpty)) ...[
+                      const SizedBox(height: 28),
+                      _SectionHeader(
+                        title: 'Chord list',
+                        icon: Icons.piano_rounded,
+                        count: chordCount != null && chordCount > 0 ? chordCount : null,
+                      ),
+                      const SizedBox(height: 12),
+                      if (useEmbeddedChords) ...[
+                        _buildChordGrid(song.chordDetails!),
+                      ] else if (songChordsAsync != null) ...[
+                        songChordsAsync.when(
+                          loading: () => const SizedBox(
+                            height: 80,
+                            child: LoadingView(),
+                          ),
+                          error: (e, _) => const Text('Failed to load chord list'),
+                          data: (availableChords) {
+                            if (availableChords.isEmpty) {
+                              return const Text('No chords available');
+                            }
+                            return _buildChordGrid(availableChords);
+                          },
                         ),
-                        const SizedBox(height: 12),
+                      ] else if (song.chordNames != null && song.chordNames!.isNotEmpty) ...[
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: sequenceChordNames
+                          children: song.chordNames!
                               .map((name) => Chip(label: Text(name)))
                               .toList(),
                         ),
                       ],
-                    ],
-
-                    // ── Chords Section ─────────────────────────────
-                    const SizedBox(height: 28),
-                    _SectionHeader(
-                      title: 'Chords',
-                      icon: Icons.piano_rounded,
-                      count: chordCount,
-                    ),
-                    const SizedBox(height: 12),
-                    if (useEmbeddedChords) ...[
-                      SizedBox(
-                        height: 140,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: song.chordDetails!.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 10),
-                          itemBuilder: (ctx, i) => ChordDiagramCard(
-                            chord: song.chordDetails![i],
-                            onTap: () =>
-                                ChordDetailSheet.show(ctx, song.chordDetails![i]),
-                          ),
-                        ),
-                      ),
-                    ] else if (songChordsAsync != null) ...[
-                      songChordsAsync.when(
-                        loading: () => const SizedBox(
-                          height: 80,
-                          child: LoadingView(),
-                        ),
-                        error: (e, _) => const Text('Failed to load chords'),
-                        data: (chords) => chords.isEmpty
-                            ? const Text('No chords linked')
-                            : SizedBox(
-                                height: 140,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: chords.length,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(width: 10),
-                                  itemBuilder: (ctx, i) => ChordDiagramCard(
-                                    chord: chords[i],
-                                    onTap: () => ChordDetailSheet.show(
-                                        ctx, chords[i]),
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ] else ...[
-                      const Text('No chords available'),
                     ],
 
                     const SizedBox(height: 100),
@@ -230,21 +311,25 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final IconData icon;
   final int? count;
+  final String? badgeText;
 
   const _SectionHeader({
     required this.title,
     required this.icon,
     this.count,
+    this.badgeText,
   });
 
   @override
   Widget build(BuildContext context) {
+    final badge = badgeText ?? (count != null ? '$count' : null);
+
     return Row(
       children: [
         Icon(icon, color: AppTheme.amber, size: 18),
         const SizedBox(width: 8),
         Text(title, style: Theme.of(context).textTheme.titleSmall),
-        if (count != null) ...[
+        if (badge != null) ...[
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -252,12 +337,17 @@ class _SectionHeader extends StatelessWidget {
               color: AppTheme.amber.withAlpha((0.12 * 255).round()),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Text(
-              '$count',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppTheme.amber,
-                    fontWeight: FontWeight.w600,
-                  ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 140),
+              child: Text(
+                badge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.amber,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
           ),
         ],

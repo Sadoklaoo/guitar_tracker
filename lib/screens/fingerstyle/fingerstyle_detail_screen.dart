@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
+import '../../models/chord.dart';
+import '../../models/fingerstyle_song.dart';
 import '../../providers/fingerstyle_provider.dart';
 import '../../providers/chords_provider.dart';
 import '../../widgets/app_states.dart';
@@ -52,11 +54,18 @@ class _FingerstyleDetailScreenState
         body: ErrorView(message: e.toString()),
       ),
       data: (song) {
+        final imageUrl =
+            'https://source.unsplash.com/featured/900x600/?${Uri.encodeComponent('${song.title} ${song.artist} guitar')}';
+
         return Scaffold(
           body: NestedScrollView(
             headerSliverBuilder: (ctx, _) => [
               // ── Hero Header ──────────────────────────────────────
               SliverAppBar(
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.pop(),
+                ),
                 expandedHeight: 220,
                 pinned: true,
                 actions: [
@@ -68,14 +77,15 @@ class _FingerstyleDetailScreenState
                 ],
                 flexibleSpace: FlexibleSpaceBar(
                   titlePadding:
-                      const EdgeInsets.fromLTRB(16, 0, 60, 56),
+                      const EdgeInsets.fromLTRB(16, 0, 60, 12),
                   title: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         song.title,
-                        style: theme.textTheme.titleLarge,
+                        style: theme.textTheme.titleLarge?.copyWith(height: 1),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -83,32 +93,56 @@ class _FingerstyleDetailScreenState
                         song.artist,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppTheme.onSurfaceMuted,
+                          height: 1,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppTheme.amberDark.withAlpha((0.12 * 255).round()),
-                          AppTheme.surface,
-                        ],
-                      ),
-                    ),
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Icon(
-                          Icons.queue_music_rounded,
-                          size: 110,
-                          color: AppTheme.amber.withAlpha((0.06 * 255).round()),
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            color: AppTheme.surface,
+                          );
+                        },
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppTheme.surface,
                         ),
                       ),
-                    ),
+                      Container(
+                        color: AppTheme.surface.withAlpha((0.32 * 255).round()),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              AppTheme.amberDark.withAlpha((0.18 * 255).round()),
+                              AppTheme.surface.withAlpha((0.85 * 255).round()),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Icon(
+                            Icons.queue_music_rounded,
+                            size: 110,
+                            color: AppTheme.amber.withAlpha((0.06 * 255).round()),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -148,7 +182,7 @@ class _FingerstyleDetailScreenState
                     tabs: const [
                       Tab(text: 'Overview'),
                       Tab(text: 'Chords'),
-                      Tab(text: 'Practice'),
+
                     ],
                   ),
                 ),
@@ -164,30 +198,58 @@ class _FingerstyleDetailScreenState
                 chordsAsync.when(
                   loading: () => const LoadingView(),
                   error: (e, _) => ErrorView(message: e.toString()),
-                  data: (chords) => chords.isEmpty
-                      ? const EmptyView(
-                          icon: Icons.piano_rounded,
-                          title: 'No chords linked',
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.all(16),
-                          children: [
-                            SizedBox(
-                              height: 150,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: chords.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(width: 10),
-                                itemBuilder: (ctx, i) => ChordDiagramCard(
-                                  chord: chords[i],
-                                  onTap: () =>
-                                      ChordDetailSheet.show(ctx, chords[i]),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                  data: (chords) {
+                    final sequenceChordCounts = <String, int>{};
+                    for (final item in song.sequence ?? <FingerstyleSequenceItem>[]) {
+                      if (item.type == 'chord' && item.value.isNotEmpty) {
+                        final chordName = item.value.trim();
+                        if (chordName.isNotEmpty) {
+                          sequenceChordCounts[chordName] =
+                              (sequenceChordCounts[chordName] ?? 0) + 1;
+                        }
+                      }
+                    }
+
+                    final chordMap = {
+                      for (final chord in chords)
+                        chord.name.toLowerCase(): chord,
+                    };
+
+                    final sequenceChords = sequenceChordCounts.entries
+                        .map((entry) {
+                          final chord = chordMap[entry.key.toLowerCase()];
+                          return chord == null
+                              ? null
+                              : _SequenceChordCard(
+                                  chord: chord,
+                                  count: entry.value,
+                                );
+                        })
+                        .whereType<_SequenceChordCard>()
+                        .toList();
+
+                    if (sequenceChords.isEmpty) {
+                      return const EmptyView(
+                        icon: Icons.piano_rounded,
+                        title: 'No chords linked',
+                      );
+                    }
+
+                    return GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.85,
+                      ),
+                      itemCount: sequenceChords.length,
+                      itemBuilder: (ctx, i) => sequenceChords[i],
+                    );
+                  },
                 ),
 
               ],
@@ -202,12 +264,13 @@ class _FingerstyleDetailScreenState
 // ── Info Grid ─────────────────────────────────────────────────────────────────
 
 class _InfoGrid extends StatelessWidget {
-  final dynamic song;
+  final FingerstyleSong song;
 
   const _InfoGrid({required this.song});
 
   @override
   Widget build(BuildContext context) {
+    final capo = song.capo;
     final items = <_GridEntry>[
       if (song.technique != null)
         _GridEntry(Icons.fingerprint_rounded, 'Technique', song.technique!),
@@ -219,8 +282,8 @@ class _InfoGrid extends StatelessWidget {
         _GridEntry(Icons.access_time_rounded, 'Time Sig.', song.timeSignature!),
       if (song.key != null)
         _GridEntry(Icons.music_note_rounded, 'Key', song.key!),
-      if (song.capo != null && song.capo > 0)
-        _GridEntry(Icons.linear_scale_rounded, 'Capo', 'Fret ${song.capo}'),
+      if (capo != null && capo > 0)
+        _GridEntry(Icons.linear_scale_rounded, 'Capo', 'Fret $capo'),
     ];
 
     if (items.isEmpty) return const SizedBox.shrink();
@@ -303,20 +366,19 @@ class _InfoCell extends StatelessWidget {
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
 class _OverviewTab extends StatelessWidget {
-  final dynamic song;
+  final FingerstyleSong song;
 
   const _OverviewTab({required this.song});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sequenceItems = song.sequence ?? [];
-    final sequenceChordNames = sequenceItems
-        .where((item) => item.type == 'chord')
-        .map((item) => item.value)
-        .where((name) => name.isNotEmpty)
-        .toSet()
-        .toList();
+    final sequenceItems = song.sequence ?? <FingerstyleSequenceItem>[];
+    final chordCounts = <String, int>{};
+    for (final item in sequenceItems.where((item) => item.type == 'chord' && item.value.isNotEmpty)) {
+      chordCounts[item.value] = (chordCounts[item.value] ?? 0) + 1;
+    }
+    final chordChips = chordCounts.entries.toList();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -336,15 +398,19 @@ class _OverviewTab extends StatelessWidget {
                     ? Text('Chord', style: theme.textTheme.bodySmall)
                     : null,
               )),
-          if (sequenceChordNames.isNotEmpty) ...[
+          if (chordChips.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text('Chord list', style: theme.textTheme.titleSmall),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: sequenceChordNames
-                  .map((name) => Chip(label: Text(name)))
+              children: chordChips
+                  .map((entry) => Chip(
+                        label: Text(entry.value > 1
+                            ? '${entry.key} x${entry.value}'
+                            : entry.key),
+                      ))
                   .toList(),
             ),
           ],
@@ -391,6 +457,57 @@ class _OverviewTab extends StatelessWidget {
             subtitle: 'Edit the song to add notes or a tab link',
           ),
       ],
+    );
+  }
+}
+
+class _SequenceChordCard extends StatelessWidget {
+  final Chord chord;
+  final int count;
+
+  const _SequenceChordCard({required this.chord, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => ChordDetailSheet.show(context, chord),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF3E3D41)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              chord.name,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppTheme.amber,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            ChordDiagram(chord: chord, size: 80, showLabel: false),
+            const SizedBox(height: 10),
+            if (count > 1)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.amber.withAlpha((0.12 * 255).round()),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'x$count',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppTheme.amber, fontWeight: FontWeight.w700),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

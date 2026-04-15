@@ -18,6 +18,7 @@ class HomeScreen extends ConsumerWidget {
     final songsAsync = ref.watch(songsProvider);
     final fingerstyleAsync = ref.watch(fingerstyleProvider);
     final theme = Theme.of(context);
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -216,7 +217,7 @@ class HomeScreen extends ConsumerWidget {
 
                 return SliverToBoxAdapter(
                   child: SizedBox(
-                    height: 180,
+                    height: 190,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -232,7 +233,7 @@ class HomeScreen extends ConsumerWidget {
                                 ? () {
                                     // ignore: avoid_print
                                     print('[HomeScreen] navigating to /songs/${song.id}');
-                                    context.go('/songs/${song.id}');
+                                    context.push('/songs/${song.id}');
                                   }
                                 : null,
                           ),
@@ -244,7 +245,7 @@ class HomeScreen extends ConsumerWidget {
               },
             ),
 
-            const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+            SliverPadding(padding: EdgeInsets.only(bottom: 24 + bottomPadding)),
           ],
         ),
       ),

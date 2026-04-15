@@ -6,7 +6,7 @@ class ApiConfig {
   // Songs
   static const String songs = '/songs';
   static String songById(String id) => '/songs/$id';
-  static String songPractice(String id) => '/songs/$id/practice';
+
 
   // Chords
   static const String chords = '/chords';
@@ -17,7 +17,6 @@ class ApiConfig {
   static const String fingerstyle = '/fingerstyle';
   static String fingerstyleById(String id) => '/fingerstyle/$id';
   static String fingerstyleChords(String id) => '/fingerstyle/$id/chords';
-  static String fingerstylePractice(String id) => '/fingerstyle/$id/practice';
   static const String fingerstyleMeta = '/fingerstyle/meta/techniques';
 
   // Timeouts
